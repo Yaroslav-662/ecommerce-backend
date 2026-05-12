@@ -1,11 +1,12 @@
 // src/routes/uploadRoutes.js
 import express from "express";
 import uploadMiddleware from "../middleware/uploadMiddleware.js";
+import { uploadCloud } from "../middleware/upload.js";
 import { verifyToken, isAdmin } from "../middleware/authMiddleware.js";
 import {
   uploadFile,
   uploadProductImages,
-  getProductImages,   // ✅ NEW
+  getProductImages,
   getAllFiles,
   deleteFile,
   deleteByUrl,
@@ -47,13 +48,12 @@ const router = express.Router();
 router.post("/file", verifyToken, uploadMiddleware.single("file"), uploadFile);
 
 /**
- * ✅ IMPORTANT: upload product images (admin, multiple)
- * POST /api/upload/products
+ * POST /api/upload/products — завантажити 1..10 фото на Cloudinary (адмін)
  *
  * @swagger
  * /api/upload/products:
  *   post:
- *     summary: Завантажити 1..10 фото товару (адмін)
+ *     summary: Завантажити 1..10 фото товару на Cloudinary (адмін)
  *     tags: [Uploads]
  *     security:
  *       - BearerAuth: []
@@ -72,19 +72,18 @@ router.post("/file", verifyToken, uploadMiddleware.single("file"), uploadFile);
  *                   format: binary
  *     responses:
  *       201:
- *         description: Фото завантажено
+ *         description: "{ urls: string[] } — Cloudinary URLs"
  */
 router.post(
   "/products",
   verifyToken,
   isAdmin,
-  uploadMiddleware.array("images", 10),
+  uploadCloud.array("images", 10), // ✅ Cloudinary, не локальний диск
   uploadProductImages
 );
 
 /**
- * ✅ NEW: list product images (admin)
- * GET /api/upload/products
+ * GET /api/upload/products — список фото товарів (адмін)
  *
  * @swagger
  * /api/upload/products:
