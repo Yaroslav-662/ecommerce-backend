@@ -30,13 +30,14 @@ export async function sendEmail({ to, subject, text, html }) {
       // 🧪 Використовуємо тестову пошту (Ethereal)
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
-        host: "smtp.ethereal.email",
-        port: 587,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,        // SSL замість STARTTLS
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
     }
 
     const info = await transporter.sendMail({
