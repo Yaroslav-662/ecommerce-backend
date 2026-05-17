@@ -1,4 +1,4 @@
-import User from "../models/User.js";
+import User from "../models/User.js"; 
 import Token from "../models/Token.js";
 import { hashPassword, comparePasswords } from "../utils/passwordUtils.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/generateToken.js";
@@ -16,14 +16,14 @@ function setAuthCookies(res, access, refresh) {
     httpOnly: true,
     sameSite: isProd ? "none" : "lax",
     secure: isProd,
-    maxAge: 15 * 60 * 1000, // 15 min
+    maxAge: 15 * 60 * 1000,
   });
 
   res.cookie("refreshToken", refresh, {
     httpOnly: true,
     sameSite: isProd ? "none" : "lax",
     secure: isProd,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -41,29 +41,6 @@ function clearAuthCookies(res) {
   });
 }
 
-
-
-/**
- * Auth controller — full-featured
- *
- * Exports:
- * - register
- * - verifyEmail
- * - login
- * - refresh
- * - logout
- * - logoutAll
- * - getSessions
- * - revokeSession
- * - setup2FA
- * - verify2FA
- * - forgotPassword
- * - resetPassword
- * - getProfile
- * - getLoginHistory
- * - googleCallback
- */
-
 /* =========================================================
    REGISTER (with email verification)
 ========================================================= */
@@ -78,7 +55,7 @@ export const register = async (req, res) => {
 
     const hashed = await hashPassword(password);
     const verifyToken = crypto.randomBytes(32).toString("hex");
-    const verifyExpires = Date.now() + 1000 * 60 * 60; // 1 hour
+    const verifyExpires = Date.now() + 1000 * 60 * 60;
 
     const user = await User.create({
       name,
@@ -91,15 +68,18 @@ export const register = async (req, res) => {
 
     const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/verify-email/${verifyToken}`;
 
-    // send verification email (sendEmail returns link for ethereal)
-    await sendEmail({
-      to: email,
-      subject: "Підтвердження електронної пошти",
-      html: `<p>Привіт ${name},</p>
-             <p>Щоб підтвердити пошту, перейдіть за посиланням:</p>
-             <p><a href="${verifyLink}">${verifyLink}</a></p>
-             <p>Посилання дійсне 1 годину.</p>`,
-    });
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Підтвердження електронної пошти",
+        html: `<p>Привіт ${name},</p>
+               <p>Щоб підтвердити пошту, перейдіть за посиланням:</p>
+               <p><a href="${verifyLink}">${verifyLink}</a></p>
+               <p>Посилання дійсне 1 годину.</p>`,
+      });
+    } catch (emailErr) {
+      console.error("Email send failed (non-critical):", emailErr.message);
+    }
 
     return res.status(201).json({ message: "Реєстрація успішна. Перевірте пошту." });
   } catch (err) {
@@ -151,7 +131,6 @@ export const login = async (req, res) => {
     const valid = await comparePasswords(password, user.password);
     if (!valid) return res.status(401).json({ message: "Невірний email або пароль" });
 
-    // If 2FA enabled — require and verify
     if (user.twoFactor?.enabled) {
       if (!twoFactorCode) return res.status(401).json({ message: "Потрібен код 2FA" });
 
@@ -165,19 +144,16 @@ export const login = async (req, res) => {
       if (!ok) return res.status(401).json({ message: "Невірний 2FA код" });
     }
 
-    // Generate tokens
     const access = generateAccessToken(user);
     const refresh = generateRefreshToken(user);
     setAuthCookies(res, access, refresh);
 
-    // Save refresh token as session
     await Token.create({
       token: refresh,
       user: user._id,
       expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
     });
 
-    // Append login history (keep last 50)
     user.loginHistory = user.loginHistory || [];
     user.loginHistory.push({
       ip: req.ip,
@@ -211,18 +187,16 @@ export const login = async (req, res) => {
 export const refresh = async (req, res) => {
   try {
     const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-if (!refreshToken) return res.status(400).json({ message: "Refresh токен відсутній" });
+    if (!refreshToken) return res.status(400).json({ message: "Refresh токен відсутній" });
 
     const stored = await Token.findOne({ token: refreshToken });
     if (!stored) return res.status(401).json({ message: "Недійсний refresh токен" });
 
-    // Verify refresh token signature
     try {
       const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
       const user = await User.findById(payload.id);
       if (!user) return res.status(401).json({ message: "Користувача не знайдено" });
 
-      // issue new tokens
       const newAccess = generateAccessToken(user);
       const newRefresh = generateRefreshToken(user);
 
@@ -233,7 +207,6 @@ if (!refreshToken) return res.status(400).json({ message: "Refresh токен в
 
       return res.json({ access: newAccess, refresh: newRefresh });
     } catch (e) {
-      // invalid refresh token
       await Token.deleteOne({ token: refreshToken });
       return res.status(401).json({ message: "Недійсний або прострочений refresh токен" });
     }
@@ -262,10 +235,8 @@ export const logout = async (req, res) => {
   }
 };
 
-
 /* =========================================================
-   LOGOUT ALL (revoke all refresh tokens for user)
-   Requires req.user (use verifyToken middleware)
+   LOGOUT ALL
 ========================================================= */
 export const logoutAll = async (req, res) => {
   try {
@@ -280,9 +251,8 @@ export const logoutAll = async (req, res) => {
   }
 };
 
-
 /* =========================================================
-   SESSIONS: list + revoke
+   SESSIONS
 ========================================================= */
 export const getSessions = async (req, res) => {
   try {
@@ -308,8 +278,7 @@ export const revokeSession = async (req, res) => {
 };
 
 /* =========================================================
-   2FA: setup (generate secret + QR)
-   Requires authenticated user (req.user.id)
+   2FA: setup
 ========================================================= */
 export const setup2FA = async (req, res) => {
   try {
@@ -323,10 +292,9 @@ export const setup2FA = async (req, res) => {
       length: 20,
     });
 
-    // ensure twoFactor object exists
     user.twoFactor = user.twoFactor || { enabled: false, secret: "" };
     user.twoFactor.secret = secret.base32;
-    user.twoFactor.enabled = false; // enable only after verify
+    user.twoFactor.enabled = false;
     await user.save();
 
     const qr = await qrcode.toDataURL(secret.otpauth_url);
@@ -383,16 +351,20 @@ export const forgotPassword = async (req, res) => {
 
     const token = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = token;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    user.resetPasswordExpires = Date.now() + 3600000;
     await user.save();
 
     const url = `${process.env.FRONTEND_URL || "http://localhost:3000"}/reset/${token}`;
 
-    await sendEmail({
-      to: email,
-      subject: "Скидання паролю",
-      html: `<p>Щоб скинути пароль, перейдіть за посиланням:</p><p><a href="${url}">${url}</a></p>`,
-    });
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Скидання паролю",
+        html: `<p>Щоб скинути пароль, перейдіть за посиланням:</p><p><a href="${url}">${url}</a></p>`,
+      });
+    } catch (emailErr) {
+      console.error("Email send failed (non-critical):", emailErr.message);
+    }
 
     return res.json({ message: "Якщо користувач існує — лист надіслано" });
   } catch (err) {
@@ -453,9 +425,7 @@ export const getLoginHistory = async (req, res) => {
 };
 
 /* =========================================================
-   GOOGLE OAUTH CALLBACK (used by passport)
-   passport should set req.user to a user document (or minimal object)
-   We generate tokens and create a refresh Token document
+   GOOGLE OAUTH CALLBACK
 ========================================================= */
 export const googleCallback = async (req, res) => {
   try {
@@ -465,7 +435,7 @@ export const googleCallback = async (req, res) => {
     const access = generateAccessToken(user);
     const refresh = generateRefreshToken(user);
 
-    setAuthCookies(res, access, refresh); // ✅ ОСЬ ТУТ
+    setAuthCookies(res, access, refresh);
 
     await Token.create({
       token: refresh,
@@ -489,7 +459,3 @@ export const googleCallback = async (req, res) => {
     return res.status(500).json({ message: "Server error in google callback" });
   }
 };
-
-
-
-
