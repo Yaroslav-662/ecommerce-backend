@@ -7,7 +7,6 @@ export async function sendEmail({ to, subject, text, html }) {
     let transporter;
 
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      // ✅ Gmail з App Password
       transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
         port: 465,
@@ -18,7 +17,6 @@ export async function sendEmail({ to, subject, text, html }) {
         },
       });
     } else {
-      // 🧪 Ethereal для тестування
       const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: "smtp.ethereal.email",
@@ -31,21 +29,15 @@ export async function sendEmail({ to, subject, text, html }) {
     }
 
     const info = await transporter.sendMail({
-      from:
-        process.env.EMAIL_FROM ||
-        `"E-commerce Shop" <${process.env.EMAIL_USER || "no-reply@example.com"}>`,
+      from: process.env.EMAIL_FROM || `"E-commerce Shop" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       text,
       html,
     });
 
-    const previewUrl = process.env.EMAIL_USER
-      ? info.response
-      : nodemailer.getTestMessageUrl(info);
-
-    console.log("📤 Email sent:", previewUrl);
-    return previewUrl;
+    console.log("📤 Email sent:", info.response);
+    return info.response;
   } catch (error) {
     console.error("❌ Email sending failed:", error.message);
     throw new Error("Email could not be sent");
