@@ -179,11 +179,35 @@ const router = express.Router();
  *     tags: [Users]
  *     security:
  *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID користувача
+ *     responses:
+ *       200:
+ *         description: Дані користувача
+ *       404:
+ *         description: Користувача не знайдено
  *   delete:
  *     summary: Видалити користувача
  *     tags: [Users]
  *     security:
  *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID користувача
+ *     responses:
+ *       200:
+ *         description: Користувача видалено
+ *       404:
+ *         description: Користувача не знайдено
  *
  * /api/users/{id}/role:
  *   put:
@@ -191,6 +215,13 @@ const router = express.Router();
  *     tags: [Users]
  *     security:
  *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID користувача
  *     requestBody:
  *       required: true
  *       content:
@@ -204,6 +235,8 @@ const router = express.Router();
  *     responses:
  *       200:
  *         description: Роль змінено
+ *       404:
+ *         description: Користувача не знайдено
  */
 
 // ====== Роутинг користувача ======
