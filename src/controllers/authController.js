@@ -18,7 +18,6 @@ function setAuthCookies(res, access, refresh) {
     secure: isProd,
     maxAge: 15 * 60 * 1000,
   });
-
   res.cookie("refreshToken", refresh, {
     httpOnly: true,
     sameSite: isProd ? "none" : "lax",
@@ -33,7 +32,6 @@ function clearAuthCookies(res) {
     sameSite: isProd ? "none" : "lax",
     secure: isProd,
   });
-
   res.clearCookie("refreshToken", {
     httpOnly: true,
     sameSite: isProd ? "none" : "lax",
@@ -42,7 +40,7 @@ function clearAuthCookies(res) {
 }
 
 /* =========================================================
-   REGISTER (with email verification)
+   REGISTER
 ========================================================= */
 export const register = async (req, res) => {
   try {
@@ -68,6 +66,10 @@ export const register = async (req, res) => {
 
     const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/verify-email/${verifyToken}`;
 
+    console.log("📧 Спроба відправки email на:", email);
+    console.log("EMAIL_USER:", process.env.EMAIL_USER);
+    console.log("EMAIL_PASS існує:", !!process.env.EMAIL_PASS);
+
     try {
       await sendEmail({
         to: email,
@@ -77,8 +79,9 @@ export const register = async (req, res) => {
                <p><a href="${verifyLink}">${verifyLink}</a></p>
                <p>Посилання дійсне 1 годину.</p>`,
       });
+      console.log("✅ Email відправлено успішно");
     } catch (emailErr) {
-      console.error("Email send failed (non-critical):", emailErr.message);
+      console.error("❌ Email send failed (non-critical):", emailErr.message);
     }
 
     return res.status(201).json({ message: "Реєстрація успішна. Перевірте пошту." });
@@ -116,7 +119,7 @@ export const verifyEmail = async (req, res) => {
 };
 
 /* =========================================================
-   LOGIN (with optional 2FA)
+   LOGIN
 ========================================================= */
 export const login = async (req, res) => {
   try {
@@ -217,16 +220,14 @@ export const refresh = async (req, res) => {
 };
 
 /* =========================================================
-   LOGOUT (single session)
+   LOGOUT
 ========================================================= */
 export const logout = async (req, res) => {
   try {
     const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-
     if (refreshToken) {
       await Token.deleteOne({ token: refreshToken });
     }
-
     clearAuthCookies(res);
     return res.json({ message: "Вихід успішний" });
   } catch (err) {
@@ -242,7 +243,6 @@ export const logoutAll = async (req, res) => {
   try {
     if (!req.user || !req.user.id) return res.status(401).json({ message: "Unauthorized" });
     await Token.deleteMany({ user: req.user.id });
-
     clearAuthCookies(res);
     return res.json({ message: "Усі сесії завершено" });
   } catch (err) {
@@ -363,7 +363,7 @@ export const forgotPassword = async (req, res) => {
         html: `<p>Щоб скинути пароль, перейдіть за посиланням:</p><p><a href="${url}">${url}</a></p>`,
       });
     } catch (emailErr) {
-      console.error("Email send failed (non-critical):", emailErr.message);
+      console.error("❌ Email send failed (non-critical):", emailErr.message);
     }
 
     return res.json({ message: "Якщо користувач існує — лист надіслано" });
