@@ -66,10 +66,6 @@ export const register = async (req, res) => {
 
     const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/verify-email/${verifyToken}`;
 
-    console.log("📧 Спроба відправки email на:", email);
-    console.log("EMAIL_USER:", process.env.EMAIL_USER);
-    console.log("EMAIL_PASS існує:", !!process.env.EMAIL_PASS);
-
     try {
       await sendEmail({
         to: email,
@@ -79,9 +75,9 @@ export const register = async (req, res) => {
                <p><a href="${verifyLink}">${verifyLink}</a></p>
                <p>Посилання дійсне 1 годину.</p>`,
       });
-      console.log("✅ Email відправлено успішно");
+      console.log("✅ Email відправлено на:", email);
     } catch (emailErr) {
-      console.error("❌ Email send failed (non-critical):", emailErr.message);
+      console.error("❌ Email send failed:", emailErr.message);
     }
 
     return res.status(201).json({ message: "Реєстрація успішна. Перевірте пошту." });
@@ -363,7 +359,7 @@ export const forgotPassword = async (req, res) => {
         html: `<p>Щоб скинути пароль, перейдіть за посиланням:</p><p><a href="${url}">${url}</a></p>`,
       });
     } catch (emailErr) {
-      console.error("❌ Email send failed (non-critical):", emailErr.message);
+      console.error("❌ Email send failed:", emailErr.message);
     }
 
     return res.json({ message: "Якщо користувач існує — лист надіслано" });
