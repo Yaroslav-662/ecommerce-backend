@@ -39,66 +39,54 @@ const getCache = async (key) => {
   return null;
 };
 
+const invalidateCache = async (key) => {
+  if (redisClient) {
+    await redisClient.del(key);
+  } else {
+    delete memCache[key];
+  }
+};
+
 /* =======================
    HELPERS
 ======================= */
 const escapeRegex = (str = "") =>
   str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/**
- * 🔥 normalizeImages
- * Підтримує:
- * - files (Swagger / Cloudinary)
- * - imagesUrls (string | string[])
- * - images (string | string[])
- *
- * Повертає:
- * - string[] → якщо фото реально передали
- * - null     → якщо фото НЕ передавали
- */
 const normalizeImages = (req) => {
   const out = [];
 
-  // 1️⃣ FILES (Swagger / Cloudinary / Multer)
   if (Array.isArray(req.files) && req.files.length) {
-    out.push(
-      ...req.files
-        .map(f => f.secure_url || f.path)
-        .filter(Boolean)
-    );
+    out.push(...req.files.map(f => f.secure_url || f.path).filter(Boolean));
   }
 
-  // 2️⃣ imagesUrls (frontend / swagger)
   const urls = req.body.imagesUrls;
   if (urls) {
     if (Array.isArray(urls)) {
       out.push(...urls.filter(Boolean));
     } else if (typeof urls === "string") {
-      out.push(
-        ...urls
-          .split(",")
-          .map(s => s.trim())
-          .filter(Boolean)
-      );
+      out.push(...urls.split(",").map(s => s.trim()).filter(Boolean));
     }
   }
 
-  // 3️⃣ images (але ігноруємо "string" зі Swagger)
   const imgs = req.body.images;
   if (imgs && imgs !== "string") {
     if (Array.isArray(imgs)) {
       out.push(...imgs.filter(Boolean));
     } else if (typeof imgs === "string") {
-      out.push(
-        ...imgs
-          .split(",")
-          .map(s => s.trim())
-          .filter(Boolean)
-      );
+      out.push(...imgs.split(",").map(s => s.trim()).filter(Boolean));
     }
   }
 
   return out.length ? out : null;
+};
+
+// ✅ Парсить знижку з body (може прийти як рядок або число)
+const parseDiscount = (value) => {
+  if (value === undefined || value === null || value === "") return undefined;
+  const num = Number(value);
+  if (isNaN(num)) return 0;
+  return Math.min(100, Math.max(0, num));
 };
 
 /* =======================
@@ -112,6 +100,7 @@ export const getProducts = async (req, res, next) => {
       q,
       category,
       sort = "-createdAt",
+      discount, // ✅ фільтр: discount=true → тільки зі знижкою
     } = req.query;
 
     const pageNum = Math.max(1, Number(page));
@@ -135,10 +124,14 @@ export const getProducts = async (req, res, next) => {
         const cat = await Category.findOne({
           $or: [{ name: category }, { slug: category }],
         }).lean();
-
         if (!cat) return res.json({ total: 0, products: [] });
         filter.category = cat._id;
       }
+    }
+
+    // ✅ Фільтр тільки зі знижкою
+    if (discount === "true" || discount === "1") {
+      filter.discount = { $gt: 0 };
     }
 
     const [products, total] = await Promise.all([
@@ -147,7 +140,7 @@ export const getProducts = async (req, res, next) => {
         .sort(sort)
         .skip(skip)
         .limit(limitNum)
-        .lean(),
+        .lean({ virtuals: true }), // ✅ включає discountPrice
       Product.countDocuments(filter),
     ]);
 
@@ -178,7 +171,7 @@ export const getProductById = async (req, res, next) => {
 
     const product = await Product.findById(id)
       .populate("category", "name")
-      .lean();
+      .lean({ virtuals: true }); // ✅ включає discountPrice
 
     if (!product) {
       return res.status(404).json({ message: "Not found" });
@@ -196,25 +189,38 @@ export const getProductById = async (req, res, next) => {
 ======================= */
 export const createProduct = async (req, res, next) => {
   try {
-    const { name, price, description = "", category, stock = 0 } = req.body;
+    const {
+      name,
+      price,
+      description = "",
+      category,
+      stock = 0,
+    } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({ message: "Name and price required" });
     }
 
     const images = normalizeImages(req) || [];
+    const discount = parseDiscount(req.body.discount) ?? 0;
 
     const product = await Product.create({
       name,
-      price,
+      price: Number(price),
       description,
       category,
-      stock,
+      stock: Number(stock),
       images,
+      discount,
     });
 
-    socket?.io?.emit("products:created", product);
-    res.status(201).json(product);
+    // Повертаємо з virtuals
+    const result = await Product.findById(product._id)
+      .populate("category", "name")
+      .lean({ virtuals: true });
+
+    socket?.io?.emit("products:created", result);
+    res.status(201).json(result);
   } catch (e) {
     next(e);
   }
@@ -233,7 +239,6 @@ export const updateProduct = async (req, res, next) => {
     const updateData = { ...req.body };
     const images = normalizeImages(req);
 
-    // 🔥 НЕ затираємо фото, якщо їх не передали
     if (images !== null) {
       updateData.images = images;
     } else {
@@ -242,15 +247,28 @@ export const updateProduct = async (req, res, next) => {
 
     delete updateData.imagesUrls;
 
+    // ✅ Обробляємо знижку
+    const discount = parseDiscount(req.body.discount);
+    if (discount !== undefined) {
+      updateData.discount = discount;
+    }
+
+    // Числові поля
+    if (updateData.price !== undefined) updateData.price = Number(updateData.price);
+    if (updateData.stock !== undefined) updateData.stock = Number(updateData.stock);
+
     const updated = await Product.findByIdAndUpdate(
       id,
       updateData,
       { new: true }
-    ).lean();
+    ).populate("category", "name").lean({ virtuals: true }); // ✅ virtuals
 
     if (!updated) {
       return res.status(404).json({ message: "Not found" });
     }
+
+    // Інвалідуємо кеш
+    await invalidateCache(`product:${id}`);
 
     socket?.io?.emit("products:updated", updated);
     res.json(updated);
@@ -274,6 +292,7 @@ export const deleteProduct = async (req, res, next) => {
       return res.status(404).json({ message: "Not found" });
     }
 
+    await invalidateCache(`product:${id}`);
     socket?.io?.emit("products:deleted", { id });
     res.json({ message: "Deleted", id });
   } catch (e) {
