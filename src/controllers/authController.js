@@ -64,7 +64,7 @@ export const register = async (req, res) => {
       verifyExpires,
     });
 
-    const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/verify-email/${verifyToken}`;
+    const verifyLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/auth/verify/${verifyToken}`;
 
     try {
       await sendEmail({
@@ -350,7 +350,7 @@ export const forgotPassword = async (req, res) => {
     user.resetPasswordExpires = Date.now() + 3600000;
     await user.save();
 
-    const url = `${process.env.FRONTEND_URL || "http://localhost:3000"}/reset/${token}`;
+    const url = `${process.env.FRONTEND_URL || "http://localhost:3000"}/auth/reset/${token}`;
 
     try {
       await sendEmail({
