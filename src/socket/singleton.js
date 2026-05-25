@@ -1,11 +1,13 @@
 let ioInstance = null;
 
-export const setIO = (io) => {
+export function setIO(io) {
   ioInstance = io;
-};
+}
 
-export const io = {
-  emit: (...args) => ioInstance?.emit(...args),
-  to: (...args) => ioInstance?.to(...args),
-  get raw() { return ioInstance; }
-};
+export function getIO() {
+  if (!ioInstance) {
+    throw new Error("Socket.io not initialized");
+  }
+
+  return ioInstance;
+}
