@@ -1,8 +1,8 @@
-// src/controllers/orderController.js
+// ecommerce-backend/src/controllers/orderController.js
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import { validateObjectId } from "../utils/validateObjectId.js";
-import socket from "../socket/index.js";
+import { io } from "../socket/singleton.js"; // Імпортуємо об'єкт io з вашого синглтону
 
 /**
  * CREATE ORDER — REST API
@@ -35,9 +35,13 @@ export const createOrder = async (req, res, next) => {
       status: "pending",
     });
 
-    // notify admin + user
-    socket.io.to(`user:${req.user.id}`).emit("order:created", order);
-    socket.io.to("admin").emit("order:created", order);
+    // Сповіщення через сокети (використовуємо методи з вашого синглтону)
+    try {
+      io.to(`user:${req.user.id}`).emit("order:created", order);
+      io.to("admin").emit("order:created", order);
+    } catch (socketError) {
+      console.error("⚠️ Socket notification failed, but order was saved:", socketError.message);
+    }
 
     return res.status(201).json(order);
   } catch (error) {
@@ -99,8 +103,13 @@ export const updateOrderStatus = async (req, res, next) => {
     order.status = status;
     await order.save();
 
-    socket.io.to(`user:${order.user._id}`).emit("order:updated", order);
-    socket.io.to("admin").emit("order:updated", order);
+    // Сповіщення про оновлення статусу
+    try {
+      io.to(`user:${order.user._id}`).emit("order:updated", order);
+      io.to("admin").emit("order:updated", order);
+    } catch (socketError) {
+      console.error("⚠️ Socket update notification failed:", socketError.message);
+    }
 
     return res.json({ message: "Order status updated", order });
   } catch (error) {
