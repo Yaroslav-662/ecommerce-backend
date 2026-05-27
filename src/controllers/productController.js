@@ -96,7 +96,7 @@ export const getProducts = async (req, res, next) => {
   try {
     const {
       page = 1,
-      limit = 12,
+      limit = await Product.countDocuments(),
       q,
       category,
       sort = "-createdAt",
